@@ -1,0 +1,3 @@
+# AVRG contact service (Lightsail). app.py itself is standard library + boto3.
+boto3>=1.34
+gunicorn>=22.0
