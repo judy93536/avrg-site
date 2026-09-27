@@ -1,4 +1,4 @@
-"""AVRG contact form: one page at /contact/ that emails judy@av-research-group.net.
+"""AVRG contact form: one page at /contact/ that emails the info@av-research-group.net group.
 
 A plain WSGI app (served by gunicorn on 127.0.0.1:8003 behind nginx). GET renders
 the form, POST validates it and sends one message through Amazon SES. Nothing is
@@ -38,7 +38,7 @@ MIN_SECONDS = 3
 MAX_SECONDS = 2 * 60 * 60
 DAILY_CAP = int(os.environ.get("CONTACT_DAILY_CAP", "50"))
 
-CONTACT_TO = os.environ.get("CONTACT_TO", "judy@av-research-group.net")
+CONTACT_TO = os.environ.get("CONTACT_TO", "info@av-research-group.net")
 CONTACT_FROM = os.environ.get("CONTACT_FROM", "contact@av-research-group.net")
 AWS_REGION = os.environ.get("AWS_REGION", "us-west-2")
 DRY_RUN = os.environ.get("CONTACT_DRY_RUN", "").strip().lower() in ("1", "true", "yes", "on")
@@ -122,7 +122,9 @@ def _under_cap() -> bool:
     return _sent_today["count"] < DAILY_CAP
 
 
-def send(source: str, data: dict):
+def send(source: str, data: dict) -> str:
+    """Send (or, in dry-run, print) one message. Returns the outcome for the log:
+    "dry-run", or "sent ses-id=<MessageId>" so a message can be traced in SES."""
     label = SOURCES[source]
     subject = f"[{label}] Message from {data['name']}"
     body = (f"From: {data['name']} <{data['email']}>\n"
@@ -133,9 +135,9 @@ def send(source: str, data: dict):
         log(f"DRY RUN — not sent. To: {CONTACT_TO} | Reply-To: {data['email']} | "
             f"Subject: {subject}\n{body}")
         _sent_today["count"] += 1
-        return
+        return "dry-run"
     import boto3  # imported lazily so dry-run and tests need no AWS SDK
-    boto3.client("sesv2", region_name=AWS_REGION).send_email(
+    resp = boto3.client("sesv2", region_name=AWS_REGION).send_email(
         FromEmailAddress=f"AVRG contact form <{CONTACT_FROM}>",
         Destination={"ToAddresses": [CONTACT_TO]},
         ReplyToAddresses=[data["email"]],
@@ -145,6 +147,7 @@ def send(source: str, data: dict):
         }},
     )
     _sent_today["count"] += 1
+    return f"sent ses-id={resp.get('MessageId', '?')}"
 
 
 # --- pages -------------------------------------------------------------------
@@ -330,11 +333,11 @@ def application(environ, start_response):
             source, values=form, notice=notice(
                 "danger", "The contact form is busy right now. Please try again tomorrow.")))
     try:
-        send(source, data)
+        outcome = send(source, data)
     except Exception as e:  # SES/network failure: keep the visitor's text, say so plainly
         log(f"send failed from={source}: {type(e).__name__}: {e}")
         return _respond(start_response, "502 Bad Gateway", render_form(
             source, values=form, notice=notice(
                 "danger", "Sorry — your message could not be sent. Please try again in a few minutes.")))
-    log(f"sent from={source} ({len(data['message'])} chars)")
+    log(f"{outcome} from={source} ({len(data['message'])} chars)")
     return _respond(start_response, "303 See Other", "", [("Location", sent_url)])

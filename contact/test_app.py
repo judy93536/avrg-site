@@ -65,6 +65,21 @@ class ContactTests(unittest.TestCase):
         self.assertEqual(source, "water")
         self.assertEqual(data["email"], "ada@example.org")
 
+    def test_log_says_dry_run_and_real_sends_carry_ses_id(self):
+        with mock.patch.object(app, "log") as log:
+            call("POST", form=good())
+        self.assertTrue(log.call_args_list[-1].args[0].startswith("dry-run from=water"))
+        fake = mock.MagicMock()
+        fake.client.return_value.send_email.return_value = {"MessageId": "0100abc"}
+        with mock.patch.object(app, "DRY_RUN", False), \
+             mock.patch.dict("sys.modules", {"boto3": fake}), \
+             mock.patch.object(app, "log") as log:
+            call("POST", form=good())
+        self.assertTrue(log.call_args_list[-1].args[0].startswith("sent ses-id=0100abc from=water"))
+
+    def test_default_recipient_is_the_group(self):
+        self.assertEqual(app.CONTACT_TO, "info@av-research-group.net")
+
     def test_sent_page(self):
         r = call(query="sent=1&from=water")
         self.assertIn("your message was sent", r["body"])

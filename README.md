@@ -5,8 +5,8 @@ alongside the water site (`water.*`) and Wiki.js (`wiki.*`), which live elsewher
 
 ```
 portal/index.html   the static landing page (nginx root /var/www/av-research-group)
-contact/app.py      the /contact/ form: a small WSGI app that emails
-                    judy@av-research-group.net through Amazon SES
+contact/app.py      the /contact/ form: a small WSGI app that emails the
+                    info@av-research-group.net group through Amazon SES
 contact/test_app.py tests (standard library only; no AWS calls)
 deploy/             systemd unit, nginx snippets, .env template
 ```
@@ -16,10 +16,15 @@ deploy/             systemd unit, nginx snippets, .env template
 - `GET /contact/?from=water|wiki|portal` renders the form; `from` only selects
   the label in the email subject and the "back" link.
 - `POST /contact/` validates and sends one email: From
-  `contact@av-research-group.net`, To `judy@av-research-group.net`, Reply-To the
-  visitor. Nothing is stored. See the docstring in `contact/app.py` for the
+  `contact@av-research-group.net`, To `info@av-research-group.net`, Reply-To the
+  visitor. `info@` is a Google Workspace group ("AVRG Info"); its members get
+  the mail, so recipients are changed in Google Admin, not here. The group must
+  let External senders post, because mail arriving through SES counts as
+  external. Nothing is stored. See the docstring in `contact/app.py` for the
   abuse controls (nginx rate limit, honeypot, signed timestamp, length checks,
   daily cap, fixed recipient).
+- Each send is logged as `sent ses-id=<MessageId>` (or `dry-run`) with the
+  source and length only — never the message.
 - SES: domain identity `av-research-group.net` in **us-west-2**, verified by
   Easy DKIM. DNS lives in the **Lightsail DNS zone**, not Route53 (the Route53
   zone for this domain is not delegated). Sending uses the send-only IAM user
