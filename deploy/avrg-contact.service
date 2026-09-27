@@ -8,8 +8,9 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/avrg-site/contact
 EnvironmentFile=/home/ubuntu/avrg-site/contact/.env
-# One worker: the daily send cap is counted in-process.
-ExecStart=/home/ubuntu/avrg-site/.venv/bin/gunicorn --workers 1 --bind 127.0.0.1:8003 --access-logfile - app:application
+# One worker: the daily send cap is counted in-process. No control socket:
+# nothing uses it, and ProtectHome=read-only blocks its default ~/.gunicorn path.
+ExecStart=/home/ubuntu/avrg-site/.venv/bin/gunicorn --workers 1 --bind 127.0.0.1:8003 --access-logfile - --no-control-socket app:application
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
